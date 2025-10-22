@@ -1,7 +1,5 @@
 # ChildObjectRecognition（COR）—— 儿童识物（基于 YOLOv11）
 
-> 说明：儿童识物版本已移除交通灯相关模块与原“高级设置”界面，仅保留简洁易用的儿童识物 GUI 与检测 CLI。
-
 ChildObjectRecognition（简称 COR）是一个基于 Ultralytics YOLOv11 的实时目标检测小应用，提供图形界面与命令行两种使用方式，可将检测结果保存为图片与可选的 YOLO txt 标签。
 
 ## 简介
@@ -98,14 +96,11 @@ uv run python -m detection.cli --model models\yolo\yolo11n.pt --source 0 --conf 
 
 窗口聚焦时按 `q`（或 `--exit-key` 指定）退出。
 
-（交通灯模式已移除）
 
 
-## 环境变量覆盖（前缀 COR_，兼容旧前缀 YV_）
+## 环境变量覆盖（前缀 COR_）
 
 除命令行外，也可用环境变量覆盖默认值（命令行优先）：
-
-优先读取新前缀 COR_，若未设置将回退读取旧前缀 YV_。对应关系：
 
 - `COR_MODEL_PATH` → `--model`
 - `COR_DEVICE` → `--device`
@@ -123,7 +118,7 @@ uv run python -m detection.cli --model models\yolo\yolo11n.pt --source 0 --conf 
 - `COR_QUIET_CV` → `--quiet-cv`
 - `COR_CAM_FAIL_LIMIT` → `--cam-fail-limit`
 
-摄像头枚举阶段日志抑制：`COR_SUPPRESS_ENUM_ERRORS=1`（默认开启；同样兼容旧变量 `YV_SUPPRESS_ENUM_ERRORS`）。
+摄像头枚举阶段日志抑制：`COR_SUPPRESS_ENUM_ERRORS=1`（默认开启）。
 
 示例（PowerShell）：
 
@@ -152,7 +147,6 @@ voice/              # TTS 工具
 
 cor_io/             # 设备与摄像头名称工具
   camera_utils.py   # DirectShow 设备名称（pygrabber）
-  camera_name.py    # WMI 存根（已移除实现）
   device_utils.py
 
 models/             # 放置模型（例如 models/yolo/yolo11n.pt）
@@ -171,7 +165,7 @@ pyproject.toml      # 依赖与工具配置（uv、ruff 等）
   - GUI：`app.kids_gui`（PySide6）
   - YOLO 检测 CLI：`detection.cli` → `detection.core`
 - 检测核心：`detection/core.py`
-  - 构造 `YOLOConfig`（支持命令行 + 环境变量 COR_ 前缀，命令行优先；兼容旧前缀 YV_）
+  - 构造 `YOLOConfig`（支持命令行 + 环境变量 COR_ 前缀，命令行优先）
   - `YOLODetector` 加载 Ultralytics YOLO 模型，读取视频帧并推理
   - 绘制结果、叠加 FPS、保存每帧与可选 YOLO txt；统计类别并做语音播报
 - GUI：`app/kids_gui.py`
@@ -194,8 +188,6 @@ pyproject.toml      # 依赖与工具配置（uv、ruff 等）
   - Windows 优先 `cv2.CAP_DSHOW` 打开整型索引摄像头；读取失败计数超过阈值提前退出
   - 支持抑制 OpenCV 低层枚举错误日志（仅在“摄像头枚举阶段”临时降低日志级别）
 
-
-<!-- 交通灯相关章节已移除：儿童识物版本不包含该模块 -->
 
 
 ### GUI 线程与语音集成（app/kids_gui.py, voice/*）
@@ -227,9 +219,6 @@ pyproject.toml      # 依赖与工具配置（uv、ruff 等）
 
 4) Windows 下无友好名称？
 - 安装 `pygrabber`（DirectShow），否则显示 `Camera n`。
-
-5) 交通灯颜色不稳定？
-- 调整 `--conf` 与 `--img-size`，或使用手动 ROI；注意场景光照与距离。
 
 
 ## 致谢

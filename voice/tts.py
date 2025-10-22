@@ -5,7 +5,6 @@
 - 文本去零宽字符与短时间重复语句“音速轻微抖动”防重复感
 - 同步 speak（阻塞）与 speak_async（后台线程）两种调用方式
 - 可通过环境变量 COR_TTS_ISOLATED 控制是否“隔离实例”（每次 speak 使用新 engine）
-    （兼容读取旧变量 YV_TTS_ISOLATED）
 """
 
 from __future__ import annotations
@@ -24,10 +23,7 @@ _log = logging.getLogger("COR.TTS")
 _lock = threading.RLock()
 _DUP_WINDOW = 2.5
 ZW_CHARS = {"\u200b", "\u200c", "\u200d", "\u200e", "\u200f"}
-# 兼容新旧环境变量前缀：优先 COR_*，回退 YV_*
 _iso_env = os.getenv("COR_TTS_ISOLATED")
-if _iso_env is None:
-    _iso_env = os.getenv("YV_TTS_ISOLATED")
 _ISOLATED = True if _iso_env is None else _iso_env.strip().lower() in {"1", "true", "on", "yes"}
 
 

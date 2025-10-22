@@ -115,17 +115,10 @@ class Announcer:
     def __init__(
         self,
         min_interval_sec: float = 1.5,
-        *,
-        flash_window_sec: float | None = None,
-        flash_min_events: int | None = None,
-        flash_yellow_ratio: float | None = None,
-        flash_cooldown_sec: float | None = None,
     ) -> None:
         self._last_text: str | None = None
         self._last_t: float = 0.0
         self._min_interval = float(min_interval_sec)
-        # 兼容旧参数：不再使用，但保留入参以避免外部调用报错
-        _ = (flash_window_sec, flash_min_events, flash_yellow_ratio, flash_cooldown_sec)
 
     def say(self, text: str) -> None:
         """执行播报，若与上次相同且间隔过短则忽略"""

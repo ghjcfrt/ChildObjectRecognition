@@ -16,9 +16,8 @@ from ultralytics import YOLO  # pyright: ignore[reportPrivateImportUsage]
 
 from voice import Announcer
 
-# 环境变量前缀迁移：优先使用新前缀 COR_，兼容旧前缀 YV_
-ENV_PREFIX = "COR_"  # 新前缀，例如 COR_MODEL_PATH
-_FALLBACK_ENV_PREFIX = "YV_"  # 兼容旧前缀
+# 环境变量前缀
+ENV_PREFIX = "COR_"  # 例如 COR_MODEL_PATH
 
 MIN_ROI_SIDE = 8
 READ_FAIL_LIMIT = 10
@@ -28,10 +27,8 @@ MAX_INDEX_DIGITS = 6
 
 
 def _env(name: str, default: Any) -> Any:
-    """读取环境变量：先查新前缀 COR_，若未设置则回退到旧前缀 YV_"""
+    """读取环境变量：只读取 COR_ 前缀，未设置则返回默认值"""
     val = os.getenv(f"{ENV_PREFIX}{name}")
-    if val is None:
-        val = os.getenv(f"{_FALLBACK_ENV_PREFIX}{name}")
     return default if val is None else val
 
 
@@ -91,12 +88,8 @@ class YOLOConfig:
     # 枚举摄像头连续失败上限（用于提前终止枚举）
     cam_fail_limit: int = field(default_factory=lambda: int(_env("CAM_FAIL_LIMIT", 3)))
 
-    # 播报/节流/黄闪参数
+    # 播报/节流参数
     ann_min_interval: float = field(default_factory=lambda: float(_env("ANN_MIN_INTERVAL", 1.5)))
-    ann_flash_window: float = field(default_factory=lambda: float(_env("ANN_FLASH_WINDOW", 3.0)))
-    ann_flash_min_events: int = field(default_factory=lambda: int(_env("ANN_FLASH_MIN_EVENTS", 6)))
-    ann_flash_yellow_ratio: float = field(default_factory=lambda: float(_env("ANN_FLASH_YELLOW_RATIO", 0.9)))
-    ann_flash_cooldown: float = field(default_factory=lambda: float(_env("ANN_FLASH_COOLDOWN", 5.0)))
 
     def to_dict(self):  # 便于调试打印
         """将配置转换为字典形式"""
@@ -130,12 +123,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-fps", dest="show_fps", action="store_false", help="关闭 FPS 显示")
     parser.add_argument("--quiet-cv", dest="quiet_cv", action="store_true", help="抑制 OpenCV 摄像头错误日志")
     parser.add_argument("--cam-fail-limit", dest="cam_fail_limit", type=int, help="摄像头枚举连续失败上限 (默认 3)")
-    # 播报/节流/黄闪参数
+    # 播报/节流参数
     parser.add_argument("--ann-min-interval", dest="ann_min_interval", type=float, help="同句最小播报间隔(秒)")
-    parser.add_argument("--ann-flash-window", dest="ann_flash_window", type=float, help="黄闪判定时间窗口(秒)")
-    parser.add_argument("--ann-flash-min-events", dest="ann_flash_min_events", type=int, help="黄闪判定最少采样数")
-    parser.add_argument("--ann-flash-yellow-ratio", dest="ann_flash_yellow_ratio", type=float, help="黄灯占比阈值(0~1)")
-    parser.add_argument("--ann-flash-cooldown", dest="ann_flash_cooldown", type=float, help="黄闪播报冷却时间(秒)")
     return parser
 
 
@@ -163,10 +152,6 @@ def load_config_from_args(argv: list[str] | None = None) -> YOLOConfig:
         "quiet_cv",
         "cam_fail_limit",
         "ann_min_interval",
-        "ann_flash_window",
-        "ann_flash_min_events",
-        "ann_flash_yellow_ratio",
-        "ann_flash_cooldown",
     ]:
         val = getattr(args, field_name, None)
         if val is not None:
@@ -201,10 +186,6 @@ class YOLODetector:
         # TTS 播报器（可配置：去重/限流/黄闪参数）
         self._ann = Announcer(
             min_interval_sec=self.cfg.ann_min_interval,
-            flash_window_sec=self.cfg.ann_flash_window,
-            flash_min_events=self.cfg.ann_flash_min_events,
-            flash_yellow_ratio=self.cfg.ann_flash_yellow_ratio,
-            flash_cooldown_sec=self.cfg.ann_flash_cooldown,
         )
 
     @staticmethod
@@ -415,16 +396,11 @@ def enumerate_cameras(max_index: int = 8) -> list[int]:
     available: list[int] = []
     consecutive_fail = 0
     try:
-        # 兼容读取新旧前缀
-        raw_fail = os.getenv(f"{ENV_PREFIX}CAM_FAIL_LIMIT")
-        if raw_fail is None:
-            raw_fail = os.getenv(f"{_FALLBACK_ENV_PREFIX}CAM_FAIL_LIMIT", "3")
+        raw_fail = os.getenv(f"{ENV_PREFIX}CAM_FAIL_LIMIT", "3")
         fail_limit = int(raw_fail)
     except ValueError:
         fail_limit = 3
-    raw_suppress = os.getenv(f"{ENV_PREFIX}SUPPRESS_ENUM_ERRORS")
-    if raw_suppress is None:
-        raw_suppress = os.getenv(f"{_FALLBACK_ENV_PREFIX}SUPPRESS_ENUM_ERRORS", "1")
+    raw_suppress = os.getenv(f"{ENV_PREFIX}SUPPRESS_ENUM_ERRORS", "1")
     suppress = str(raw_suppress).lower() not in {"0", "false", ""}
     with _opencv_enum_log_suppressed(enable=suppress):
         for i in range(max_index):
