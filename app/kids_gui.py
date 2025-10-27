@@ -26,10 +26,10 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
                                QVBoxLayout, QWidget)
 
 from app.kids_core import ChildConfig, ChildDetector
+from cor_io.camera_utils import get_directshow_device_names
 from detection.api import enumerate_cameras
 from detection.coco_intros_cn import get_intro_by_id
 from voice.tts_queue import TTSManager
-from cor_io.camera_utils import get_directshow_device_names
 
 
 def _bgr_to_qpix(img_bgr: np.ndarray) -> QPixmap:
@@ -47,7 +47,7 @@ class KidsWindow(QWidget):
     def __init__(self) -> None:
         """儿童识物主窗口"""
         super().__init__()
-        self.setWindowTitle("儿童识物 - YOLO 教学")
+        self.setWindowTitle("儿童识物")
         self.resize(980, 700)
 
         # 检测器：固定图片尺寸为 640 以确保实时性
@@ -106,6 +106,10 @@ class KidsWindow(QWidget):
         self._btn_recognize = QPushButton("识别并播报")
         self._btn_recognize.setMinimumHeight(40)
         self._btn_recognize.clicked.connect(self._on_recognize_image)
+        pic_group = QGroupBox("图片、视频识物")
+        pic_vbox = QVBoxLayout(pic_group)
+        pic_vbox.addWidget(self._btn_open)
+        pic_vbox.addWidget(self._btn_recognize)
 
         cam_group = QGroupBox("摄像头识物")
         grid = QGridLayout(cam_group)
@@ -129,14 +133,18 @@ class KidsWindow(QWidget):
         grid.addWidget(self._btn_cam_refresh, 0, 2)
         grid.addWidget(self._btn_cam_start, 1, 1)
         grid.addWidget(self._btn_cam_stop, 1, 2)
-        grid.addWidget(self._auto_speak_chk, 2, 1, 1, 2)
-        grid.addWidget(self._auto_intro_chk, 3, 1, 1, 2)
-        grid.addWidget(self._btn_speak_intro, 4, 1, 1, 2)
 
-        row.addWidget(self._btn_open, 1)
-        row.addWidget(self._btn_recognize, 1)
+        row.addWidget(pic_group, 1)
         row.addWidget(cam_group, 2)
         root.addLayout(row)
+
+        # 播报设置 独立于 图片识物 与 摄像头识物
+        announce_row = QHBoxLayout()
+        announce_row.addWidget(self._auto_speak_chk)
+        announce_row.addWidget(self._auto_intro_chk)
+        announce_row.addWidget(self._btn_speak_intro)
+        announce_row.addStretch(1)
+        root.addLayout(announce_row)
 
     # ---------- 事件 ----------
     def _start_intro_guard(self) -> None:
