@@ -21,10 +21,21 @@ import cv2
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
-                               QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-                               QMessageBox, QPushButton, QStatusBar,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.kids_core import ChildConfig, ChildDetector
 from cor_io.camera_utils import get_directshow_device_names
@@ -48,7 +59,7 @@ class KidsWindow(QWidget):
     def __init__(self) -> None:
         """儿童识物主窗口"""
         super().__init__()
-        self.setWindowTitle("儿童识物")
+        self.setWindowTitle("视界")
         self.resize(730, 510)
 
         # 检测器：固定图片尺寸为 640 以确保实时性
