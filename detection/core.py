@@ -66,13 +66,15 @@ class YOLOConfig:
     source: int | str = field(default_factory=lambda: _parse_source(_env("SOURCE", "0")))
     save_dir: str = field(default_factory=lambda: _env("SAVE_DIR", "results"))
     save_txt: bool = field(default_factory=lambda: _as_bool(_env("SAVE_TXT", default=False)))
+    # 可选：保存叠加结果为视频文件（mp4/avi），为空表示不保存
+    save_video: str | None = field(default_factory=lambda: (_env("SAVE_VIDEO", "") or None))
 
     # 摄像头选择（仅启动时）
     select_camera: bool = field(default_factory=lambda: _as_bool(_env("SELECT_CAMERA", default=False)))
     max_cam_index: int = field(default_factory=lambda: int(_env("MAX_CAM_INDEX", 8)))
 
     # 推理参数
-    conf: float = field(default_factory=lambda: float(_env("CONF", 0.5)))
+    conf: float = field(default_factory=lambda: float(_env("CONF", 0.6)))
     # 输入尺寸；为空(None) 时表示使用原始帧尺寸而不是模型的默认缩放尺寸
     img_size: list[int] | None = field(default_factory=lambda: _as_optional_int_list(_env("IMG_SIZE", "")))
 
@@ -111,6 +113,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", dest="device", help="运行设备: cuda / cpu / mps / auto")
     parser.add_argument("--source", dest="source", help="视频源: 摄像头索引或视频文件路径")
     parser.add_argument("--save-dir", dest="save_dir", help="结果保存目录")
+    parser.add_argument("--save-video", dest="save_video", help="输出叠加结果的视频文件路径 (mp4/avi)")
     parser.add_argument("--save-txt", dest="save_txt", action="store_true", help="保存 YOLO txt 标注文件")
     # 摄像头相关（仅启动选择，不再支持运行时切换）
     parser.add_argument("--select-camera", dest="select_camera", action="store_true", help="启动时列出并交互选择可用摄像头")
@@ -141,6 +144,7 @@ def load_config_from_args(argv: list[str] | None = None) -> YOLOConfig:
         "source",
         "save_dir",
         "save_txt",
+        "save_video",
         "select_camera",
         "max_cam_index",
         "conf",
@@ -311,6 +315,14 @@ class YOLODetector:
             msg = f"无法打开视频源： {cfg.source}"
             raise RuntimeError(msg)
 
+        # 可选视频写出（在拿到第一帧的尺寸后再初始化）
+        writer = None
+        fps_val = cap.get(cv2.CAP_PROP_FPS)
+        try:
+            fps = float(fps_val) if fps_val and fps_val > 1.0 else 25.0
+        except Exception:
+            fps = 25.0
+
         frame_id = 0
         while True:
             if self._should_stop(stop_event):
@@ -321,12 +333,34 @@ class YOLODetector:
                     break
                 continue
             self._reset_read_fail()
-            self._process_frame(frame, frame_id)
+            annotated = self._process_frame(frame, frame_id)
+
+            # 初始化视频写出器并写帧（如需）
+            if writer is None and cfg.save_video:
+                out_path = Path(cfg.save_video)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                h, w = annotated.shape[:2]
+                ext = out_path.suffix.lower()
+                fourcc = cv2.VideoWriter.fourcc(*("XVID" if ext == ".avi" else "mp4v"))
+                writer = cv2.VideoWriter(str(out_path), fourcc, fps, (w, h))
+                if not writer.isOpened():
+                    print(f"[警告] 无法打开视频写出器: {out_path}")
+                    writer = None
+            if writer is not None:
+                try:
+                    writer.write(annotated)
+                except Exception as err:
+                    print(f"[警告] 写出视频帧失败: {err}")
             frame_id += 1
             if cv2.waitKey(1) & 0xFF == ord(cfg.exit_key):
                 break
 
         cap.release()
+        if writer is not None:
+            try:
+                writer.release()
+            except Exception:
+                pass
         cv2.destroyAllWindows()
 
 def _format_boxes_yolo(result) -> list[str]:
@@ -402,6 +436,7 @@ def enumerate_cameras(max_index: int = 8) -> list[int]:
         fail_limit = 3
     raw_suppress = os.getenv(f"{ENV_PREFIX}SUPPRESS_ENUM_ERRORS", "1")
     suppress = str(raw_suppress).lower() not in {"0", "false", ""}
+
     with _opencv_enum_log_suppressed(enable=suppress):
         for i in range(max_index):
             if _camera_is_usable(i):
@@ -412,7 +447,6 @@ def enumerate_cameras(max_index: int = 8) -> list[int]:
                 if available and consecutive_fail >= fail_limit:
                     break
     return available
-
 
 def interactive_select_camera(max_index: int) -> int:
     """交互式选择摄像头索引"""

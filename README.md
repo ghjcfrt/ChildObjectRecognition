@@ -95,10 +95,10 @@ uv run python -m app.kids_gui
 
 ```powershell
 # 方式 A：统一入口
-uv run python .\main.py detect --model models\yolo\yolo11n.pt --source 0 --conf 0.5 --save-txt
+uv run python .\main.py detect --model models\yolo\yolo11n.pt --source 0 --conf 0.6 --save-txt
 
 # 方式 B：直接运行模块
-uv run python -m detection.cli --model models\yolo\yolo11n.pt --source 0 --conf 0.5 --save-txt
+uv run python -m detection.cli --model models\yolo\yolo11n.pt --source 0 --conf 0.6 --save-txt
 ```
 
 常用参数：

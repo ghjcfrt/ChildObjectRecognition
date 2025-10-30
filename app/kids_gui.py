@@ -2,6 +2,7 @@
 
 功能
 - 图片识物：打开图片 -> 识别 -> 在图上标注并播报
+- 本地视频识物：打开视频 -> 实时识别并高亮中心物体，可自动播报当前中心物体
 - 摄像头识物：选择摄像头 -> 开始 -> 实时识别并高亮中心物体，可自动播报当前中心物体
 
 设计
@@ -48,19 +49,20 @@ class KidsWindow(QWidget):
         """儿童识物主窗口"""
         super().__init__()
         self.setWindowTitle("儿童识物")
-        self.resize(980, 700)
+        self.resize(730, 510)
 
         # 检测器：固定图片尺寸为 640 以确保实时性
         model_path = str(pathlib.Path(__file__).resolve().parents[1] / "models" / "yolo" / "yolo11n.pt")
-        self._cfg = ChildConfig(model_path=model_path, conf=0.5, img_size=[640, 640], device="auto")
+        self._cfg = ChildConfig(model_path=model_path, conf=0.6, img_size=[640, 640], device="auto")
         try:
             self._det = ChildDetector(self._cfg)
         except Exception as e:
             QMessageBox.critical(self, "模型加载失败", f"请检查模型文件是否存在：\n{model_path}\n\n错误：{e}")
             raise
 
-        # 摄像头
+        # 摄像头 / 本地视频
         self._cap: Optional[cv2.VideoCapture] = None
+        self._cap_is_file: bool = False  # True 表示当前 _cap 来自本地视频文件
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_timer)
         self._last_center_label: Optional[str] = None
@@ -100,7 +102,7 @@ class KidsWindow(QWidget):
 
         # 按钮区
         row = QHBoxLayout()
-        self._btn_open = QPushButton("打开图片")
+        self._btn_open = QPushButton("打开图片/视频")
         self._btn_open.setMinimumHeight(40)
         self._btn_open.clicked.connect(self._on_open_image)
         self._btn_recognize = QPushButton("识别并播报")
@@ -136,15 +138,16 @@ class KidsWindow(QWidget):
 
         row.addWidget(pic_group, 1)
         row.addWidget(cam_group, 2)
+        announce_group = QGroupBox("播报设置")
+        announce_col = QVBoxLayout(announce_group)
+        announce_col.setContentsMargins(8, 8, 8, 8)
+        announce_col.setSpacing(8)
+        announce_col.addWidget(self._auto_speak_chk)
+        announce_col.addWidget(self._auto_intro_chk)
+        announce_col.addWidget(self._btn_speak_intro)
+        announce_col.addStretch(1)
+        row.addWidget(announce_group, 1)
         root.addLayout(row)
-
-        # 播报设置 独立于 图片识物 与 摄像头识物
-        announce_row = QHBoxLayout()
-        announce_row.addWidget(self._auto_speak_chk)
-        announce_row.addWidget(self._auto_intro_chk)
-        announce_row.addWidget(self._btn_speak_intro)
-        announce_row.addStretch(1)
-        root.addLayout(announce_row)
 
     # ---------- 事件 ----------
     def _start_intro_guard(self) -> None:
@@ -194,25 +197,58 @@ class KidsWindow(QWidget):
             self._cam_combo.addItem(label, userData=cam_idx)
 
     def _on_open_image(self) -> None:
-        """打开图片文件"""
-        path, _ = QFileDialog.getOpenFileName(self, "选择图片", filter="图像 (*.jpg *.png *.jpeg *.bmp);;所有文件 (*.*)")
+        """打开图片或本地视频文件
+
+        需求变化：将“本地视频识别”和“本地图片识别”合并到该入口；
+        若选择图片则仅加载并显示，点击“识别并播报”处理该图片；
+        若选择视频则直接以定时器方式开启逐帧检测，复用“停止”按钮结束。
+        """
+        # 若已有摄像头/视频在运行，先停止
+        if self._cap is not None:
+            with contextlib.suppress(Exception):
+                self._on_cam_stop()
+
+        # 同时允许选择图片与视频格式
+        file_filter = (
+            "图片/视频 (*.jpg *.jpeg *.png *.bmp *.mp4 *.avi *.mkv *.mov *.wmv *.flv *.webm);;"
+            "图片 (*.jpg *.jpeg *.png *.bmp);;"
+            "视频 (*.mp4 *.avi *.mkv *.mov *.wmv *.flv *.webm);;"
+            "所有文件 (*.*)"
+        )
+        path, _ = QFileDialog.getOpenFileName(self, "选择图片或视频", filter=file_filter)
         if not path:
             return
+
+        # 尝试按图片读取；若失败则按视频打开
         self._last_image_path = path
         img = cv2.imread(path)
-        if img is None:
-            QMessageBox.warning(self, "读取失败", "无法读取该图片")
-            return
-        self._last_image_bgr = img
-        self._preview.setPixmap(
-            _bgr_to_qpix(img).scaled(
-                self._preview.width(),
-                self._preview.height(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
+        if img is not None:
+            # 打开的是图片
+            self._last_image_bgr = img
+            self._preview.setPixmap(
+                _bgr_to_qpix(img).scaled(
+                    self._preview.width(),
+                    self._preview.height(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
             )
-        )
-        self._status.showMessage(f"已打开: {path}")
+            self._status.showMessage(f"已打开图片: {path}")
+            return
+
+        # 尝试作为视频文件打开
+        cap = cv2.VideoCapture(path)
+        if not cap.isOpened():
+            QMessageBox.warning(self, "打开失败", "无法读取该文件（既不是图片也不是可打开的视频）")
+            return
+        # 作为视频启动定时器循环
+        self._cap = cap
+        self._cap_is_file = True
+        self._last_center_label = None
+        self._last_speak_t = 0.0
+        # 使用 ~30fps 的tick；实际取决于 read() 成功率与模型速度
+        self._timer.start(33)
+        self._status.showMessage(f"已打开视频: {path}，点击‘停止’结束")
 
     def _on_recognize_image(self) -> None:
         """识别当前打开的图片并播报结果"""
@@ -267,6 +303,7 @@ class KidsWindow(QWidget):
             QMessageBox.critical(self, "错误", f"无法打开摄像头 {idx}")
             return
         self._cap = cap
+        self._cap_is_file = False
         self._last_center_label = None
         self._last_speak_t = 0.0
         self._timer.start(33)
@@ -285,6 +322,7 @@ class KidsWindow(QWidget):
             except Exception:
                 pass
             self._cap = None
+            self._cap_is_file = False
             self._status.showMessage("已停止摄像头")
             # 恢复刷新与设备选择
             with contextlib.suppress(Exception):
@@ -315,6 +353,11 @@ class KidsWindow(QWidget):
             return
         ok, frame = cap.read()
         if not ok or frame is None:
+            # 本地视频文件在读到结尾时主动停止；摄像头则忽略一次失败
+            if self._cap_is_file:
+                with contextlib.suppress(Exception):
+                    self._on_cam_stop()
+                self._status.showMessage("视频播放结束")
             return
         # 推理
         dets, plotted = self._det.detect_frame(frame)

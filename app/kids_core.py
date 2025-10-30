@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 try:
-    from ultralytics import YOLO # pyright: ignore[reportPrivateImportUsage]
+    from ultralytics import YOLO  # pyright: ignore[reportPrivateImportUsage]
 except ImportError as e:
     YOLO = None
     _YOLO_IMPORT_ERR = e
@@ -44,7 +44,7 @@ def _select_device(requested: str | None) -> str:
 @dataclass
 class ChildConfig:
     model_path: str = "models/yolo/yolo11n.pt"
-    conf: float = 0.5
+    conf: float = 0.6
     img_size: list[int] | None = None  # None -> 原始尺寸
     device: str = "auto"
 
